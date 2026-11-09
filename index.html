@@ -26,6 +26,7 @@
   }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
@@ -83,6 +84,7 @@ button { font: inherit; color: inherit; }
 .updated { margin-top: 12px; }
 .deps { list-style: none; margin: 0; padding: 0; }
 .dep { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+a.dep { color: inherit; text-decoration: none; }
 .dep .to { font-weight: 600; overflow-wrap: anywhere; }
 .dep .when { font-weight: 700; white-space: nowrap; }
 .dep .note { grid-column: 2 / 4; }
@@ -133,7 +135,7 @@ input {
   <section id="result" aria-live="polite" hidden></section>
 
   <section id="nearby" hidden>
-    <div class="row"><h2>Vertrekt hier vlakbij</h2><button id="refresh" class="link">Vernieuw</button></div>
+    <div class="row"><h2>Haltes dichtbij</h2><button id="refresh" class="link">Vernieuw</button></div>
     <ul id="deps" class="deps"></ul>
   </section>
 
@@ -154,6 +156,11 @@ input {
 
 <script>
 const API = 'https://api.transitous.org/api';
+const PHOTON = 'https://photon.komoot.io/api/';
+const SEARCH_BOX = { south: 50.76, west: 4.52, north: 51.0, east: 4.88 };
+const GYM_WORDS = /^(gym|gyms|fitness|fitnesscentrum|sportschool)$/i;
+const GYM_QUERIES = ['fitness', 'gym', 'basic-fit', 'jims', 'anytime', 'fit'];
+const MAX_HITS = 10;
 const LEUVEN = { lat: 50.8798, lon: 4.7005 };
 const LEUVEN_RADIUS_KM = 8;
 const SEARCH_RADIUS_KM = 20;
@@ -171,6 +178,7 @@ let mode = 'now';
 let current = null;
 let planToken = 0;
 let updating = false;
+let lastPos = null;
 
 function loadPlaces() {
   try {
@@ -215,18 +223,22 @@ function untilText(target) {
   return left < 60 ? `${left} min` : `${Math.floor(left / 60)} u ${left % 60} min`;
 }
 
-async function api(path, params) {
-  const url = `${API}/${path}?${new URLSearchParams(params)}`;
-  const response = await fetch(url, { signal: AbortSignal.timeout(20000) });
+async function getJson(url, params) {
+  const response = await fetch(`${url}?${new URLSearchParams(params)}`, { signal: AbortSignal.timeout(20000) });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
+
+const api = (path, params) => getJson(`${API}/${path}`, params);
 
 function locate(maxAge) {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) return reject(new Error('geen locatie'));
     navigator.geolocation.getCurrentPosition(
-      pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      pos => {
+        lastPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        resolve(lastPos);
+      },
       reject,
       { enableHighAccuracy: true, timeout: 12000, maximumAge: maxAge }
     );
@@ -353,12 +365,14 @@ async function findOptions(pos, place) {
   return { options, walk, arriveBy };
 }
 
+const googleNavigate = stop => `https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lon}&travelmode=walking&dir_action=navigate`;
+
 function mapLinks(stop) {
   const point = `${stop.lat},${stop.lon}`;
   const link = (text, href) => el('a', { href, target: '_blank', rel: 'noopener', textContent: text });
   return el('div', { class: 'links' },
     link('Apple Kaarten', `https://maps.apple.com/?daddr=${point}&dirflg=w`),
-    link('Google Maps', `https://www.google.com/maps/dir/?api=1&destination=${point}&travelmode=walking`)
+    link('Google Maps', googleNavigate(stop))
   );
 }
 
@@ -502,7 +516,7 @@ async function loadNearby() {
       .sort((a, b) => ms(a.place.departure) - ms(b.place.departure))
       .slice(0, 8);
     $('nearby').hidden = false;
-    $('deps').replaceChildren(...(departures.length ? departures.map(stop => el('li', { class: 'dep' },
+    $('deps').replaceChildren(...(departures.length ? departures.map(stop => el('li', {}, el('a', { class: 'dep', href: googleNavigate(stop.place), target: '_blank', rel: 'noopener' },
       chip(stop),
       el('span', { class: 'to', textContent: stop.headsign || '' }),
       el('span', { class: 'when', data: { at: ms(stop.place.departure) } }),
@@ -510,7 +524,7 @@ async function loadNearby() {
         class: 'note',
         textContent: `${shortStop(stop.place.name)}, ${clock(stop.place.departure)}, ${liveText(stop.realTime ? { dep: stop.place.departure, sched: stop.place.scheduledDeparture } : null)}`
       })
-    )) : [el('li', { class: 'note', textContent: 'Geen vertrekken gevonden.' })]));
+    ))) : [el('li', { class: 'note', textContent: 'Geen vertrekken gevonden.' })]));
     tick();
   } catch {
     $('status').textContent = 'De routedienst reageert even niet.';
@@ -535,10 +549,51 @@ function openAdd() {
   $('add').showModal();
 }
 
-function hitLabel(hit) {
-  const title = hit.type === 'ADDRESS' ? `${hit.street || hit.name} ${hit.houseNumber || ''}`.trim() : hit.name;
-  const area = (hit.areas || []).find(item => item.default);
-  return { title, area: [hit.zip, area && area.name].filter(Boolean).join(' ') };
+function makeHit(title, street, place, lat, lon) {
+  const join = parts => parts.filter(Boolean).join(' ');
+  return { title, area: [join(street), join(place)].filter(Boolean).join(', '), lat, lon };
+}
+
+const fromHere = hit => distanceKm(lastPos || LEUVEN, hit);
+
+async function searchGyms() {
+  const results = await Promise.allSettled(GYM_QUERIES.map(query => searchPhoton(query, { osm_tag: 'leisure:fitness_centre' })));
+  return results
+    .flatMap(result => result.status === 'fulfilled' ? result.value : [])
+    .sort((a, b) => fromHere(a) - fromHere(b));
+}
+
+async function searchPhoton(text, extra = {}) {
+  const { south, west, north, east } = SEARCH_BOX;
+  const data = await getJson(PHOTON, {
+    q: text, lat: LEUVEN.lat, lon: LEUVEN.lon, limit: MAX_HITS, location_bias_scale: 0.1,
+    bbox: `${west},${south},${east},${north}`, ...extra
+  });
+  return data.features.map(({ properties: p, geometry }) => {
+    const street = [p.street, p.housenumber];
+    return makeHit(p.name || street.filter(Boolean).join(' '), p.name ? street : [], [p.postcode, p.city],
+      geometry.coordinates[1], geometry.coordinates[0]);
+  }).filter(hit => hit.title);
+}
+
+async function searchTransitous(text) {
+  const hits = await api('v1/geocode', { text, language: 'nl', place: `${LEUVEN.lat},${LEUVEN.lon}` });
+  return hits.filter(hit => distanceKm(hit, LEUVEN) <= SEARCH_RADIUS_KM).map(hit => {
+    const title = hit.type === 'ADDRESS' ? `${hit.street || hit.name} ${hit.houseNumber || ''}`.trim() : hit.name;
+    const area = (hit.areas || []).find(item => item.default);
+    return makeHit(title, [], [hit.zip, area && area.name], hit.lat, hit.lon);
+  });
+}
+
+async function findPlaces(text) {
+  for (const search of [GYM_WORDS.test(text) ? searchGyms : null, searchPhoton]) {
+    if (!search) continue;
+    try {
+      const found = await search(text);
+      if (found.length) return found;
+    } catch {}
+  }
+  return searchTransitous(text);
 }
 
 function placeSearch(input, list, message, onPick) {
@@ -549,16 +604,20 @@ function placeSearch(input, list, message, onPick) {
     const mine = ++token;
     message.textContent = '';
     if (text.length < 3) return list.replaceChildren();
+    message.textContent = 'Zoeken…';
     try {
-      const hits = await api('v1/geocode', { text, language: 'nl', place: `${LEUVEN.lat},${LEUVEN.lon}` });
+      const found = await findPlaces(text);
       if (mine !== token) return;
-      const nearby = hits.filter(hit => distanceKm(hit, LEUVEN) <= SEARCH_RADIUS_KM).slice(0, 6);
-      message.textContent = nearby.length ? '' : 'Niks gevonden rond Leuven.';
-      list.replaceChildren(...nearby.map(hit => {
-        const { title, area } = hitLabel(hit);
-        return el('li', {}, el('button', { class: 'hit', onclick: () => onPick(hit, title) },
-          el('b', { textContent: title }), el('span', { textContent: area })));
-      }));
+      const seen = new Set();
+      const unique = found.filter(hit => {
+        const key = `${hit.title}|${hit.lat.toFixed(3)}|${hit.lon.toFixed(3)}`;
+        return !seen.has(key) && seen.add(key);
+      }).slice(0, MAX_HITS);
+      message.textContent = unique.length ? '' : 'Niks gevonden rond Leuven.';
+      list.replaceChildren(...unique.map(hit => el('li', {}, el('button', { class: 'hit', onclick: () => onPick(hit, hit.title) },
+        el('b', { textContent: hit.title }),
+        el('span', { textContent: [hit.area, `${fromHere(hit).toFixed(1).replace('.', ',')} km`].filter(Boolean).join(' · ') })
+      ))));
     } catch {
       if (mine === token) message.textContent = 'Zoeken lukt even niet.';
     }
