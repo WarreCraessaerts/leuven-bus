@@ -139,7 +139,7 @@ input {
     <ul id="deps" class="deps"></ul>
   </section>
 
-  <footer>Routes via Transitous, met data van De Lijn en OpenStreetMap. Geen officiële De Lijn-app.</footer>
+  <footer>Routes via Transitous, met data van De Lijn en OpenStreetMap. Geen officiële De Lijn-app. <span id="version"></span></footer>
 </main>
 
 <dialog id="add">
@@ -155,6 +155,7 @@ input {
 </dialog>
 
 <script>
+const APP_VERSION = '3';
 const API = 'https://api.transitous.org/api';
 const PHOTON = 'https://photon.komoot.io/api/';
 const SEARCH_BOX = { south: 50.76, west: 4.52, north: 51.0, east: 4.88 };
@@ -651,8 +652,17 @@ $('close').addEventListener('click', () => $('add').close());
 $('modeNow').addEventListener('click', () => setMode('now'));
 $('modeBy').addEventListener('click', () => setMode('by'));
 $('by').addEventListener('change', () => { if (current && $('by').value) go(current); });
+async function checkForUpdate() {
+  try {
+    const response = await fetch(`./?check=${Date.now()}`, { cache: 'no-store' });
+    const latest = (await response.text()).match(/const APP_VERSION = '([^']+)'/)?.[1];
+    if (latest && latest !== APP_VERSION && !location.search.includes(`v=${latest}`)) location.replace(`./?v=${latest}`);
+  } catch {}
+}
+
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
+  checkForUpdate();
   loadNearby();
   if (current) update(++planToken, true);
 });
@@ -660,8 +670,10 @@ setInterval(tick, 15000);
 setInterval(() => { if (!document.hidden && current && !updating) update(++planToken, true); }, RESULT_REFRESH_MS);
 setInterval(() => { if (!document.hidden) loadNearby(); }, NEARBY_REFRESH_MS);
 
+$('version').textContent = `Versie ${APP_VERSION}`;
 renderPlaces();
 loadNearby();
+checkForUpdate();
 </script>
 </body>
 </html>
