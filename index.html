@@ -72,9 +72,9 @@ button { font: inherit; color: inherit; }
 }
 .big .chip { font-size: 24px; min-width: 52px; padding: 6px 10px; border-radius: 10px; }
 .stop { font-size: 18px; font-weight: 650; overflow-wrap: anywhere; }
-.links { display: flex; gap: 8px; margin: 12px 0; }
+.links { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 0; }
 .links a {
-  flex: 1; padding: 10px 8px; border-radius: 10px; text-align: center; text-decoration: none; font-weight: 600;
+  flex: 1 1 30%; padding: 10px 6px; font-size: 14px; border-radius: 10px; text-align: center; text-decoration: none; font-weight: 600;
   color: var(--accent); border: 1px solid var(--accent);
 }
 .note { color: var(--muted); font-size: 14px; }
@@ -91,10 +91,11 @@ a.dep { color: inherit; text-decoration: none; }
 footer { margin-top: 28px; color: var(--muted); font-size: 12px; }
 dialog {
   width: min(440px, calc(100vw - 32px)); max-height: 80vh; border: 1px solid var(--line);
+  margin: calc(env(safe-area-inset-top) + 12px) auto auto;
   border-radius: 16px; padding: 16px; background: var(--card); color: var(--ink);
 }
 dialog::backdrop { background: rgba(0,0,0,.45); }
-dialog h3 { margin: 0 0 12px; font-size: 20px; }
+dialog h3 { margin: 0; font-size: 20px; }
 label { display: block; margin-bottom: 12px; font-weight: 600; font-size: 14px; color: var(--muted); }
 input {
   display: block; width: 100%; margin-top: 4px; padding: 11px 12px; font: inherit; font-size: 16px;
@@ -104,6 +105,46 @@ input {
 .hit { display: block; width: 100%; padding: 10px 0; background: none; border: 0; border-top: 1px solid var(--line); text-align: left; cursor: pointer; }
 .hit b { font-weight: 600; }
 .hit span { display: block; color: var(--muted); font-size: 14px; }
+.opts { margin-top: 8px; }
+.opt { border-top: 1px solid var(--line); }
+.opt-head { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 0; background: none; border: 0; text-align: left; cursor: pointer; }
+.opt-head .chips { display: flex; align-items: center; gap: 3px; flex: none; }
+.opt-head .main { flex: 1; min-width: 0; }
+.opt-head .times { display: block; white-space: nowrap; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.opt-head .note { display: block; }
+.opt-head .count { flex: none; text-align: right; }
+.opt-head .count small { display: block; color: var(--muted); font-size: 12px; }
+.opt-head .count b { color: var(--accent); white-space: nowrap; }
+.opt.open .opt-head .times::after { content: ' \25B4'; color: var(--muted); font-size: 14px; }
+.opt:not(.open) .opt-head .times::after { content: ' \25BE'; color: var(--muted); font-size: 14px; }
+.opt-body { padding: 4px 0 16px; }
+.steps { list-style: none; margin: 0; padding: 0; }
+.step { display: grid; grid-template-columns: 44px 14px minmax(0, 1fr); column-gap: 10px; }
+.step .t { font-weight: 700; font-variant-numeric: tabular-nums; }
+.step .rail { position: relative; }
+.step .rail::before {
+  content: ''; position: absolute; top: 6px; left: 1px; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--card); border: 3px solid var(--muted); box-sizing: border-box; z-index: 1;
+}
+.step .rail::after { content: ''; position: absolute; top: 16px; bottom: -6px; left: 6px; width: 2px; }
+.step.walk .rail::after { width: 0; border-left: 2px dotted var(--muted); }
+.step.wait .rail::after { background: var(--line); }
+.step.bus .rail::after { left: 5px; width: 4px; background: var(--leg, var(--accent)); }
+.step.bus .rail::before { border-color: var(--leg, var(--accent)); }
+.step.none .rail::after { display: none; }
+.step .what { padding-bottom: 16px; }
+.step .title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; }
+.step .flag { margin-top: 2px; }
+.via { margin-top: 4px; color: var(--muted); font-size: 14px; }
+.via summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+.via ol { list-style: none; margin: 6px 0 0; padding: 0; }
+.via li { padding: 2px 0; }
+.via li span { display: inline-block; width: 44px; font-variant-numeric: tabular-nums; }
+.more {
+  width: 100%; margin-top: 4px; padding: 12px; border-radius: 10px; cursor: pointer; font-weight: 600;
+  background: none; color: var(--accent); border: 1px solid var(--accent);
+}
+.more:disabled { opacity: .6; }
 </style>
 </head>
 <body>
@@ -117,8 +158,9 @@ input {
     <div class="row"><h2>Wanneer?</h2></div>
     <div class="seg">
       <button id="modeNow" class="on">Nu</button>
-      <button id="modeBy">Aankomen tegen</button>
-      <input id="by" type="time" aria-label="Aankomen tegen" hidden>
+      <button id="modeDepart">Vertrek om</button>
+      <button id="modeBy">Aankomst tegen</button>
+      <input id="by" type="time" aria-label="Tijd" hidden>
     </div>
   </section>
 
@@ -143,19 +185,19 @@ input {
 </main>
 
 <dialog id="add">
-  <h3>Plek toevoegen</h3>
+  <div class="row"><h3>Plek toevoegen</h3><button id="close" class="link">Sluiten</button></div>
   <label>Naam op de knop
     <input id="name" placeholder="bv. Gym" maxlength="24" autocomplete="off">
   </label>
   <label>Adres of plaats zoeken
     <input id="query" placeholder="bv. Gasthuisberg" autocomplete="off" enterkeyhint="search">
   </label>
+  <p id="addMsg" class="note"></p>
   <ul id="hits" class="hits"></ul>
-  <div class="row" style="margin:10px 0 0"><span id="addMsg" class="note"></span><button id="close" class="link">Sluiten</button></div>
 </dialog>
 
 <script>
-const APP_VERSION = '3';
+const APP_VERSION = '4';
 const API = 'https://api.transitous.org/api';
 const PHOTON = 'https://photon.komoot.io/api/';
 const SEARCH_BOX = { south: 50.76, west: 4.52, north: 51.0, east: 4.88 };
@@ -171,12 +213,21 @@ const RESULT_REFRESH_MS = 30000;
 const NEARBY_REFRESH_MS = 60000;
 const LATE_BUS_LOOKBACK_MS = 10 * 60000;
 const LIVE_WINDOW_MS = 90 * 60000;
+const REPLAN_AFTER_MS = 10 * 60000;
+const IS_APPLE = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent);
 const $ = id => document.getElementById(id);
+
+// Oudere iPhones (iOS 13) kennen replaceChildren niet.
+if (!Element.prototype.replaceChildren) {
+  Element.prototype.replaceChildren = function (...kids) { this.textContent = ''; this.append(...kids); };
+}
 
 let places = loadPlaces();
 let editing = false;
 let mode = 'now';
 let current = null;
+let currentTrip = null;
+let nearbyToken = 0;
 let planToken = 0;
 let updating = false;
 let lastPos = null;
@@ -224,8 +275,16 @@ function untilText(target) {
   return left < 60 ? `${left} min` : `${Math.floor(left / 60)} u ${left % 60} min`;
 }
 
+// AbortSignal.timeout bestaat pas sinds iOS 16; zonder dit faalde elke zoekopdracht op oudere iPhones.
+function timeoutSignal(limit) {
+  if (AbortSignal.timeout) return AbortSignal.timeout(limit);
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), limit);
+  return controller.signal;
+}
+
 async function getJson(url, params) {
-  const response = await fetch(`${url}?${new URLSearchParams(params)}`, { signal: AbortSignal.timeout(20000) });
+  const response = await fetch(`${url}?${new URLSearchParams(params)}`, { signal: timeoutSignal(20000) });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
@@ -247,9 +306,10 @@ function locate(maxAge) {
 }
 
 function locationError(err) {
-  return err && err.code === 1
+  if (!err || err.code !== 1) return 'Je locatie lukt even niet. Probeer het zo opnieuw.';
+  return IS_APPLE
     ? 'Geen toegang tot je locatie. Zet dit aan via Instellingen > Privacy en beveiliging > Locatievoorzieningen > Safari-websites.'
-    : 'Je locatie lukt even niet. Probeer het zo opnieuw.';
+    : 'Geen toegang tot je locatie. Geef je browser toegang via het slotje naast het adres, of via de instellingen van je gsm.';
 }
 
 const inLeuven = pos => distanceKm(pos, LEUVEN) <= LEUVEN_RADIUS_KM;
@@ -288,21 +348,28 @@ function liveText(live) {
   return 'live: op tijd';
 }
 
-function defaultDeadline() {
-  const hour = (new Date().getHours() + 1) % 24;
-  return `${String(hour).padStart(2, '0')}:00`;
+function defaultTime() {
+  const now = new Date();
+  if (mode === 'by') return `${String((now.getHours() + 1) % 24).padStart(2, '0')}:00`;
+  const later = new Date(Math.ceil((now.getTime() + 15 * 60000) / 300000) * 300000);
+  return `${String(later.getHours()).padStart(2, '0')}:${String(later.getMinutes()).padStart(2, '0')}`;
 }
 
-function deadline() {
-  const [hour, minute] = ($('by').value || defaultDeadline()).split(':').map(Number);
+function pickedTime() {
+  if (mode === 'now') return null;
+  const [hour, minute] = ($('by').value || defaultTime()).split(':').map(Number);
   const target = new Date();
   target.setHours(hour, minute, 0, 0);
-  if (target <= new Date()) target.setDate(target.getDate() + 1);
+  const past = mode === 'by' ? target <= new Date() : target < Date.now() - 60 * 60000;
+  if (past) target.setDate(target.getDate() + 1);
   return target;
 }
 
+const dayWord = time => new Date(time).toDateString() === new Date().toDateString() ? '' : 'morgen ';
+
 const busLegs = option => option.legs.filter(leg => leg.mode === 'BUS');
 const busTime = leg => ms(leg.live ? leg.live.dep : leg.startTime);
+const busShift = leg => busTime(leg) - ms(leg.startTime);
 
 async function addLive(legs) {
   const soon = Date.now() + LIVE_WINDOW_MS;
@@ -314,7 +381,7 @@ async function addLive(legs) {
     if (!boards.has(stopId)) boards.set(stopId, api('v5/stoptimes', { stopId, n: 15 }).catch(() => ({})));
     const match = ((await boards.get(stopId)).stopTimes || []).find(stop => stop.tripId === leg.tripId);
     if (!match) return;
-    if (match.cancelled || match.tripCancelled) leg.cancelled = true;
+    leg.cancelled = Boolean(match.cancelled || match.tripCancelled);
     if (match.realTime) leg.live = { dep: match.place.departure, sched: match.place.scheduledDeparture };
   }));
 }
@@ -323,57 +390,90 @@ function summarize(option) {
   const buses = busLegs(option);
   const first = buses[0];
   const last = buses[buses.length - 1];
-  const finalLeg = option.legs[option.legs.length - 1];
   return {
     buses,
     first,
     busAt: busTime(first),
     leaveAt: busTime(first) - (ms(first.startTime) - ms(option.startTime)),
-    arriveAt: ms(option.endTime) + busTime(last) - ms(last.startTime),
-    lastWalk: finalLeg.mode === 'WALK' ? finalLeg.duration : 0,
-    tight: buses.slice(1).some((bus, i) => busTime(bus) < ms(buses[i].endTime) + busTime(buses[i]) - ms(buses[i].startTime)),
+    arriveAt: ms(option.endTime) + busShift(last),
     cancelled: buses.some(bus => bus.cancelled)
   };
 }
 
-async function findOptions(pos, place) {
-  const arriveBy = mode === 'by' ? deadline() : null;
+// Een trip = alle opties die we al kennen voor één zoekvraag, plus de cursor om verder te bladeren.
+async function plan(pos, place, openKey) {
+  const when = pickedTime();
+  const arriveBy = mode === 'by' ? when : null;
   const params = {
     fromPlace: `${pos.lat},${pos.lon}`,
     toPlace: `${place.lat},${place.lon}`,
     transitModes: 'BUS',
-    numItineraries: 8,
-    time: (arriveBy || new Date(Date.now() - LATE_BUS_LOOKBACK_MS)).toISOString()
+    numItineraries: 6,
+    time: (when || new Date(Date.now() - LATE_BUS_LOOKBACK_MS)).toISOString()
   };
   if (arriveBy) params.arriveBy = true;
   const data = await api('v5/plan', params);
-  const seen = new Set();
-  const candidates = (data.itineraries || []).filter(option => {
+  const trip = {
+    place, pos, params, arriveBy, openKey,
+    departAt: mode === 'depart' ? when : null,
+    items: new Map(),
+    cursor: arriveBy ? data.previousPageCursor : data.nextPageCursor,
+    userPaged: false,
+    loadedAt: Date.now(),
+    walk: arriveBy ? null : (data.direct || []).find(option => option.legs.length === 1)
+  };
+  await addItems(trip, data.itineraries);
+  const shown = visibleOptions(trip).length;
+  if (shown < 3) await morePages(trip, 3 - shown).catch(() => {});
+  return trip;
+}
+
+async function addItems(trip, itineraries) {
+  const fresh = [];
+  for (const option of itineraries || []) {
     const buses = busLegs(option);
-    if (!buses.length || seen.has(buses[0].tripId)) return false;
-    seen.add(buses[0].tripId);
-    return true;
-  });
-  await addLive(candidates.flatMap(busLegs));
+    if (!buses.length) continue;
+    const key = buses[0].tripId;
+    const old = trip.items.get(key);
+    if (old && ms(old.endTime) <= ms(option.endTime)) continue;
+    trip.items.set(key, option);
+    fresh.push(option);
+  }
+  await addLive(fresh.flatMap(busLegs));
+}
+
+async function morePages(trip, wanted) {
+  const before = visibleOptions(trip).length;
+  for (let page = 0; page < 3 && trip.cursor; page++) {
+    const data = await api('v5/plan', { ...trip.params, pageCursor: trip.cursor });
+    trip.cursor = trip.arriveBy ? data.previousPageCursor : data.nextPageCursor;
+    await addItems(trip, data.itineraries);
+    if (visibleOptions(trip).length >= before + wanted) return;
+  }
+}
+
+// Gooi opties weg die nergens goed voor zijn: vroeger vertrekken, niet vroeger aankomen, en niet minder overstappen.
+function visibleOptions(trip) {
   const now = Date.now();
-  const options = candidates.map(summarize)
-    .filter(option => !option.cancelled && option.leaveAt >= now - 60000 && (!arriveBy || option.arriveAt <= arriveBy))
-    .sort(arriveBy
-      ? (a, b) => b.busAt - a.busAt
-      : (a, b) => a.arriveAt - b.arriveAt || b.leaveAt - a.leaveAt)
-    .slice(0, 3);
-  const walk = arriveBy ? null : (data.direct || []).find(option => option.legs.length === 1);
-  return { options, walk, arriveBy };
+  const list = [...trip.items.entries()]
+    .map(([key, option]) => ({ key, option, ...summarize(option) }))
+    .filter(o => !o.cancelled && o.leaveAt >= now - 60000 && (!trip.arriveBy || o.arriveAt <= trip.arriveBy));
+  const beats = (b, a) => b !== a && b.leaveAt >= a.leaveAt && b.arriveAt <= a.arriveAt && b.buses.length <= a.buses.length
+    && (b.leaveAt > a.leaveAt || b.arriveAt < a.arriveAt || b.buses.length < a.buses.length);
+  return list
+    .filter(a => !list.some(b => beats(b, a)))
+    .sort(trip.arriveBy ? (a, b) => b.busAt - a.busAt : (a, b) => a.busAt - b.busAt);
 }
 
 const googleNavigate = stop => `https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lon}&travelmode=walking&dir_action=navigate`;
 
-function mapLinks(stop) {
+function mapLinks(stop, trip) {
   const point = `${stop.lat},${stop.lon}`;
   const link = (text, href) => el('a', { href, target: '_blank', rel: 'noopener', textContent: text });
   return el('div', { class: 'links' },
-    link('Apple Kaarten', `https://maps.apple.com/?daddr=${point}&dirflg=w`),
-    link('Google Maps', googleNavigate(stop))
+    link('Halte in Google', googleNavigate(stop)),
+    link('Halte in Apple', `https://maps.apple.com/?daddr=${point}&dirflg=w`),
+    link('Hele route', `https://www.google.com/maps/dir/?api=1&origin=${trip.pos.lat},${trip.pos.lon}&destination=${trip.place.lat},${trip.place.lon}&travelmode=transit`)
   );
 }
 
@@ -382,45 +482,134 @@ function updatedLine() {
   return el('p', { id: 'updated', class: 'note updated', textContent: `Bijgewerkt om ${time}` });
 }
 
-function renderResult(place, { options, walk, arriveBy }) {
+function step({ time, title, lines = [], rail, color, flag, extra }) {
+  const node = el('li', { class: `step ${rail}` },
+    el('span', { class: 't', textContent: clock(time) }),
+    el('span', { class: 'rail' }),
+    el('div', { class: 'what' },
+      el('div', { class: 'title' }, ...[].concat(title)),
+      ...lines.filter(Boolean).map(text => el('div', { class: 'note', textContent: text })),
+      flag ? el('div', { class: 'flag', textContent: flag }) : null,
+      extra
+    )
+  );
+  if (color) node.style.setProperty('--leg', color);
+  return node;
+}
+
+const walkDistance = leg => leg.distance ? ` (${Math.round(leg.distance / 10) * 10} m)` : '';
+
+function routeSteps(o, place, openStops) {
+  const legs = o.option.legs;
+  const steps = [];
+  const firstWalk = legs[0].mode === 'WALK' && legs[0].duration >= 60 ? legs[0] : null;
+  if (firstWalk) steps.push(step({
+    time: o.leaveAt, rail: 'walk', title: 'Vertrekken',
+    lines: [`Wandel ${minutes(firstWalk.duration)} min${walkDistance(firstWalk)} naar halte ${shortStop(o.first.from.name)}`]
+  }));
+  o.buses.forEach((bus, index) => {
+    const shift = busShift(bus);
+    const arrive = ms(bus.endTime) + shift;
+    const via = bus.intermediateStops || [];
+    const viaKey = `${o.key}|${index}`;
+    const color = /^[0-9a-f]{6}$/i.test(bus.routeColor || '') ? `#${bus.routeColor}` : null;
+    steps.push(step({
+      time: busTime(bus), rail: 'bus', color,
+      title: [chip(bus), bus.headsign ? `richting ${bus.headsign}` : 'bus'],
+      lines: [`Opstappen aan ${shortStop(bus.from.name)}${bus.from.track ? `, perron ${bus.from.track}` : ''}`, liveText(bus.live)],
+      extra: via.length ? el('details', { class: 'via', open: openStops.has(viaKey), data: { key: viaKey } },
+        el('summary', { textContent: `${via.length + 1} haltes, ${minutes((ms(bus.endTime) - ms(bus.startTime)) / 1000)} min rijden` }),
+        el('ol', {}, ...via.map(stop => el('li', {},
+          el('span', { textContent: clock(ms(stop.arrival || stop.departure) + shift) }), shortStop(stop.name))))
+      ) : null
+    }));
+    const next = o.buses[index + 1];
+    const after = legs.slice(legs.indexOf(bus) + 1, next ? legs.indexOf(next) : legs.length);
+    const walk = after.filter(leg => leg.mode === 'WALK').reduce((sum, leg) => sum + leg.duration, 0);
+    if (next) {
+      const wait = Math.round((busTime(next) - arrive) / 60000 - walk / 60);
+      steps.push(step({
+        time: arrive, rail: walk >= 60 ? 'walk' : 'wait', title: `Afstappen aan ${shortStop(bus.to.name)}`,
+        lines: [walk >= 60
+          ? `Wandel ${minutes(walk)} min naar ${shortStop(next.from.name)}, dan ${Math.max(0, wait)} min wachten`
+          : `Overstappen, ${Math.max(0, wait)} min wachten`],
+        flag: wait < 2 ? 'Krappe overstap.' : null
+      }));
+    } else {
+      steps.push(step({
+        time: arrive, rail: walk >= 60 ? 'walk' : 'none', title: `Afstappen aan ${shortStop(bus.to.name)}`,
+        lines: [walk >= 60 ? `Wandel ${minutes(walk)} min naar ${place.name}` : null]
+      }));
+      if (walk >= 60) steps.push(step({ time: o.arriveAt, rail: 'none', title: `Aankomst: ${place.name}` }));
+    }
+  });
+  return steps;
+}
+
+function optionView(o, trip, openStops) {
+  const open = o.key === trip.openKey;
+  const transfers = o.buses.length - 1;
+  const head = el('button', {
+    class: 'opt-head', ariaExpanded: String(open),
+    onclick: () => { trip.openKey = open ? 'none' : o.key; renderTrip(); }
+  },
+    el('span', { class: 'chips' }, ...o.buses.map(chip)),
+    el('span', { class: 'main' },
+      el('span', { class: 'times', textContent: `${clock(o.busAt)} → ${clock(o.arriveAt)}` }),
+      el('span', { class: 'note', textContent: [
+        `${minutes((o.arriveAt - o.leaveAt) / 1000)} min`,
+        transfers ? `${transfers} overstap${transfers > 1 ? 'pen' : ''}` : 'rechtstreeks',
+        o.first.live ? liveText(o.first.live).replace('live: ', '') : null
+      ].filter(Boolean).join(' · ') })
+    ),
+    el('span', { class: 'count' }, el('small', { textContent: 'vertrek' }), el('b', { data: { leave: o.leaveAt } }))
+  );
+  return el('div', { class: `opt${open ? ' open' : ''}` }, head,
+    open ? el('div', { class: 'opt-body' },
+      el('ol', { class: 'steps' }, ...routeSteps(o, trip.place, openStops)),
+      mapLinks(o.first.from, trip)
+    ) : null);
+}
+
+function renderTrip() {
+  const trip = current && currentTrip;
+  if (!trip) return;
   const section = $('result');
   section.hidden = false;
-  const title = el('h2', { textContent: `Naar ${place.name}${arriveBy ? `, tegen ${clock(arriveBy)}` : ''}` });
-  if (!options.length) {
-    section.replaceChildren(el('div', { class: 'card' },
-      title,
-      el('p', { textContent: arriveBy ? 'Ik vind geen bus meer die op tijd is.' : 'Ik vind nu geen bus.' }),
-      walk ? el('p', { class: 'note', textContent: `Te voet: ${minutes(walk.duration)} min` }) : null,
-      updatedLine()
-    ));
-    return;
-  }
-  const [best, ...others] = options;
-  const walkWins = walk && Date.now() + walk.duration * 1000 <= best.arriveAt;
-  const finish = best.lastWalk >= 60 ? `, met nog ${minutes(best.lastWalk)} min wandelen op het einde` : '';
+  const openStops = new Set([...section.querySelectorAll('details[open]')].map(node => node.dataset.key));
+  const options = visibleOptions(trip);
+  if (trip.openKey !== 'none' && !options.some(o => o.key === trip.openKey)) trip.openKey = options.length ? options[0].key : null;
+  const when = trip.arriveBy ? `, ${dayWord(trip.arriveBy)}tegen ${clock(trip.arriveBy)}`
+    : trip.departAt ? `, ${dayWord(trip.departAt)}vanaf ${clock(trip.departAt)}` : '';
+  const fastest = Math.min(...options.map(o => o.arriveAt));
+  const walkWins = trip.walk && !trip.departAt && Date.now() + trip.walk.duration * 1000 <= fastest;
   section.replaceChildren(el('div', { class: 'card' },
-    title,
-    el('div', { class: 'big' }, chip(best.first), el('div', { class: 'leave', data: { leave: best.busAt } })),
-    el('p', { class: 'stop', textContent: `${clock(best.busAt)} aan ${shortStop(best.first.from.name)}` }),
-    el('p', { class: 'note', textContent: liveText(best.first.live) }),
-    mapLinks(best.first.from),
-    ...best.buses.slice(1).map(bus => el('div', { class: 'alt' },
-      chip(bus),
-      el('span', { textContent: `Overstappen om ${clock(busTime(bus))} aan ${shortStop(bus.from.name)}` })
-    )),
-    best.tight ? el('p', { class: 'flag', textContent: 'Door de vertraging wordt je overstap krap.' }) : null,
-    el('p', { textContent: `Je bent er om ${clock(best.arriveAt)}${finish}.` }),
-    walkWins ? el('p', { class: 'flag', textContent: `Te voet (${minutes(walk.duration)} min) ben je er minstens even snel.` }) : null,
-    others.length ? el('div', { class: 'alts' },
-      el('h2', { textContent: arriveBy ? 'Vroeger' : 'Daarna' }),
-      ...others.map(option => el('div', { class: 'alt' },
-        chip(option.first),
-        el('span', { textContent: `${clock(option.busAt)} aan ${shortStop(option.first.from.name)}, je bent er om ${clock(option.arriveAt)}` })
-      ))
-    ) : null,
+    el('h2', { textContent: `Naar ${trip.place.name}${when}` }),
+    options.length ? null : el('p', { textContent: trip.arriveBy ? 'Ik vind geen bus die op tijd is.' : 'Ik vind geen bus.' }),
+    walkWins ? el('p', { class: 'flag', textContent: `Te voet (${minutes(trip.walk.duration)} min) ben je er minstens even snel.` })
+      : !options.length && trip.walk ? el('p', { class: 'note', textContent: `Te voet: ${minutes(trip.walk.duration)} min` }) : null,
+    el('div', { class: 'opts' }, ...options.map(o => optionView(o, trip, openStops))),
+    trip.cursor ? el('button', {
+      class: 'more', textContent: trip.arriveBy ? 'Vroegere bussen' : 'Latere bussen',
+      onclick: event => loadMore(trip, event.currentTarget)
+    }) : null,
     updatedLine()
   ));
   tick();
+}
+
+async function loadMore(trip, button) {
+  button.disabled = true;
+  button.textContent = 'Laden…';
+  try {
+    await morePages(trip, 1);
+    trip.userPaged = true;
+    if (trip === currentTrip) renderTrip();
+  } catch {
+    if (trip !== currentTrip) return;
+    button.disabled = false;
+    button.textContent = 'Lukt even niet, tik om opnieuw te proberen';
+  }
 }
 
 function renderMessage(text) {
@@ -432,12 +621,20 @@ function renderMessage(text) {
 async function update(token, silent) {
   updating = true;
   try {
+    const trip = currentTrip;
+    if (silent && trip && trip.userPaged && Date.now() - trip.loadedAt < REPLAN_AFTER_MS) {
+      // Je hebt zelf verder gebladerd: hou de lijst, vernieuw enkel de live tijden.
+      await addLive([...trip.items.values()].flatMap(busLegs));
+      if (token === planToken && trip === currentTrip) renderTrip();
+      return;
+    }
     const pos = await locate(silent ? 20000 : 15000);
     if (token !== planToken) return;
     if (!inLeuven(pos)) return renderMessage(NOT_IN_LEUVEN);
-    const found = await findOptions(pos, current);
+    const found = await plan(pos, current, silent && trip ? trip.openKey : null);
     if (token !== planToken) return;
-    renderResult(current, found);
+    currentTrip = found;
+    renderTrip();
     if (!silent) $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } catch (err) {
     if (token !== planToken) return;
@@ -447,12 +644,13 @@ async function update(token, silent) {
       renderMessage(err && err.code ? locationError(err) : 'De routedienst reageert even niet. Probeer het zo opnieuw.');
     }
   } finally {
-    updating = false;
+    if (token === planToken) updating = false;
   }
 }
 
 async function go(place, tile) {
   current = place;
+  currentTrip = null;
   const token = ++planToken;
   document.querySelectorAll('.tile.busy').forEach(other => other.classList.remove('busy'));
   if (tile) tile.classList.add('busy');
@@ -462,11 +660,14 @@ async function go(place, tile) {
 }
 
 function setMode(next) {
+  if (mode === next) return;
   mode = next;
   $('modeNow').classList.toggle('on', mode === 'now');
+  $('modeDepart').classList.toggle('on', mode === 'depart');
   $('modeBy').classList.toggle('on', mode === 'by');
-  $('by').hidden = mode !== 'by';
-  if (mode === 'by' && !$('by').value) $('by').value = defaultDeadline();
+  $('by').hidden = mode === 'now';
+  $('by').setAttribute('aria-label', mode === 'by' ? 'Aankomen tegen' : 'Vertrekken om');
+  if (mode !== 'now') $('by').value = defaultTime();
   if (current) go(current);
 }
 
@@ -488,13 +689,17 @@ async function nearestStops(pos) {
 }
 
 async function loadNearby() {
+  const mine = ++nearbyToken;
   let pos;
   try {
     pos = await locate(30000);
   } catch (err) {
+    if (mine !== nearbyToken) return;
     $('status').textContent = locationError(err);
+    $('nearby').hidden = true;
     return;
   }
+  if (mine !== nearbyToken) return;
   if (!inLeuven(pos)) {
     $('status').textContent = NOT_IN_LEUVEN;
     $('nearby').hidden = true;
@@ -502,12 +707,15 @@ async function loadNearby() {
   }
   try {
     const stops = await nearestStops(pos);
+    if (mine !== nearbyToken) return;
     if (!stops.length) {
+      $('nearby').hidden = true;
       $('status').textContent = 'Geen bushalte gevonden in de buurt.';
       return;
     }
     $('status').textContent = `Dichtste halte: ${shortStop(stops[0].name)}, ${Math.round(stops[0].km * 1000)} m`;
     const results = await Promise.allSettled(stops.map(stop => api('v5/stoptimes', { stopId: stop.stopId, n: 5 })));
+    if (mine !== nearbyToken) return;
     const now = Date.now();
     const seen = new Set();
     const departures = results
@@ -528,14 +736,14 @@ async function loadNearby() {
     ))) : [el('li', { class: 'note', textContent: 'Geen vertrekken gevonden.' })]));
     tick();
   } catch {
-    $('status').textContent = 'De routedienst reageert even niet.';
+    if (mine === nearbyToken) $('status').textContent = 'De routedienst reageert even niet.';
   }
 }
 
 function tick() {
   document.querySelectorAll('[data-leave]').forEach(node => {
     const left = untilText(Number(node.dataset.leave));
-    node.textContent = left ? `Over ${left}` : 'Nu';
+    node.textContent = left ? `over ${left}` : 'nu';
   });
   document.querySelectorAll('[data-at]').forEach(node => {
     node.textContent = untilText(Number(node.dataset.at)) || 'nu';
@@ -650,13 +858,14 @@ $('edit').addEventListener('click', () => { editing = !editing; renderPlaces(); 
 $('refresh').addEventListener('click', loadNearby);
 $('close').addEventListener('click', () => $('add').close());
 $('modeNow').addEventListener('click', () => setMode('now'));
+$('modeDepart').addEventListener('click', () => setMode('depart'));
 $('modeBy').addEventListener('click', () => setMode('by'));
 $('by').addEventListener('change', () => { if (current && $('by').value) go(current); });
 async function checkForUpdate() {
   try {
     const response = await fetch(`./?check=${Date.now()}`, { cache: 'no-store' });
     const latest = (await response.text()).match(/const APP_VERSION = '([^']+)'/)?.[1];
-    if (latest && latest !== APP_VERSION && !location.search.includes(`v=${latest}`)) location.replace(`./?v=${latest}`);
+    if (latest && latest !== APP_VERSION && new URLSearchParams(location.search).get('v') !== latest) location.replace(`./?v=${latest}`);
   } catch {}
 }
 
@@ -664,7 +873,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) return;
   checkForUpdate();
   loadNearby();
-  if (current) update(++planToken, true);
+  if (current && !updating) update(++planToken, true);
 });
 setInterval(tick, 15000);
 setInterval(() => { if (!document.hidden && current && !updating) update(++planToken, true); }, RESULT_REFRESH_MS);
